@@ -20,16 +20,19 @@ const createEvent = async (req, res) => {
     }
 }
 const joinEvent = async (req, res) => {
+    console.log(req.params.id)
     try {
         const event = await eventmodels.findById(req.params.id);
         console.log(event)
         if (event) {
+            if (event.players.find((player) => player._id.toString() === req.userid)) {
+                return res.status(400).json({ msg: 'User has already joined the event' });
+            }
             if (event.maxPlayers <= event.players.length) {
                 return res.status(400).json({ msg: 'Event is already full' });
             }
-            if (event.players.find((player) => player.user.toString() === req.userid)) {
-                return res.status(400).json({ msg: 'User has already joined the event' });
-            }
+            // (event.players.find((player) =>console.log(player._id)) )
+            
             event.players.push({ user: req.userid, status: 'pending' });
             await (await event.save()).populate("players.user");
             res.json(event.players);
@@ -45,13 +48,18 @@ const joinEvent = async (req, res) => {
 
 const getEvent = async (req, res) => {
     try {
-        const events = await eventmodels.find().populate("organizer", "-password").sort({ date: 'asc' });
-        res.json(events)
+        const events = await eventmodels.find({
+            date: { $gte: new Date().toISOString().substring(0, 10) } 
+        })
+            .populate("organizer", "-password")
+            .sort({ date: 'asc' }); 
+        res.json(events);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
 }
+
 const updateStatus = async (req, res) => {
     try {
         const { id, playerId } = req.params;
@@ -144,7 +152,28 @@ const expireEvent = async (req, res) => {
     }
 };
 
+const getEventDetails = async (req, res) => {
+    try {
+        const eventId = req.params.id;
+        const event = await eventmodels.findOne({_id:eventId}).populate('organizer').populate('players.user', '-password');
+        if (!event) {
+            return res.status(404).json({ msg: 'Event not found' });
+        }
+        // const players = event.players.map(player => ({
+        //     id: player.user,
+        //     name: player.user.name,
+        //     email: player.user.email,
+        //     status: player.status
+        // }));
+        res.json(event);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+}
+
+
 module.exports = {
-    updateStatus, getEvent, joinEvent, createEvent , expireEvent,cancelStatus
+    updateStatus, getEvent, joinEvent, createEvent, expireEvent, cancelStatus, getEventDetails 
 }
 
